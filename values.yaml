@@ -1,0 +1,218 @@
+---
+# Puppet Server Helm Values
+# Official Chart: puppetlabs/puppetserver-helm-chart
+# This file contains all customizations for your deployment
+additions:
+  domain: "config-server.cyber-armor.net"
+  postgres:
+    user: "CHANGEME"
+    password: "CHANGEME"
+    address: ""
+#############################################
+# Puppet Server Configuration
+#############################################
+puppetserver:
+  # Your Puppet control repository
+  puppeturl: "git@github.com:YOUR_ORG/puppet-control-repo.git"  # CHANGE THIS!
+  
+  masters:
+    # Number of Puppet Server replicas
+    replicas: 2
+    
+    # CRITICAL: FQDNs for certificate validation
+    # Include: public FQDN, service names for internal routing
+    fqdns:
+      alternateServerNames: "puppet,puppet.puppet.svc.cluster.local,puppet.yourdomain.com"  # CHANGE: Add your public domain!
+    
+    # Resources for Puppet Server
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+    
+    # JVM settings
+    extraEnv:
+      - name: PUPPETSERVER_JAVA_ARGS
+        value: "-Xms2048m -Xmx2048m -XX:MaxRAMPercentage=75.0"
+      # IMPORTANT: Disable auto-sign in production!
+      - name: AUTOSIGN
+        value: "true"  # Set to "false" after initial setup
+    
+    # Persistence
+    persistence:
+      enabled: true
+      size: 10Gi
+      # storageClass: ""  # Uncomment to use specific storage class
+    
+    # Service configuration
+    service:
+      type: ClusterIP
+      ports:
+        puppetserver:
+          port: 8140
+          targetPort: 8140
+          protocol: TCP
+  
+  # Compilers for horizontal scaling (disable initially)
+  compilers:
+    enabled: false
+    replicas: 0
+
+#############################################
+# r10k (Code Manager)
+#############################################
+r10k:
+  # Run r10k as deployment (recommended over sidecar)
+  asSidecar: false
+  asDeployment: true
+  
+  code:
+    # SSH authentication (recommended for private repos)
+    viaSsh:
+      credentials:
+        ssh:
+          # Reference to existing secret created via SealedSecrets/ESO
+          existingSecret: "r10k-ssh-key"
+          key: "id-control_repo.rsa"
+    
+    # Alternative: HTTPS with token (comment out viaSsh if using this)
+    # viaHttps:
+    #   credentials:
+    #     netrc:
+    #       existingSecret: "r10k-https-credentials"
+    #       key: "netrc"
+  
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "200m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+#############################################
+# PuppetDB Configuration
+#############################################
+puppetdb:
+  # Resources
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+  
+  # External PostgreSQL configuration
+  extraEnv:
+    - name: PUPPETDB_POSTGRES_HOSTNAME
+      value: "postgresql.default.svc.cluster.local"  # CHANGE THIS to your PostgreSQL service!
+    - name: PUPPETDB_POSTGRES_PORT
+      value: "5432"
+    - name: PUPPETDB_POSTGRES_DATABASE
+      value: "puppetdb"
+    # Credentials from secret
+    - name: PUPPETDB_POSTGRES_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: puppetdb-postgres-secret
+          key: username
+    - name: PUPPETDB_POSTGRES_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: puppetdb-postgres-secret
+          key: password
+  
+  # Persistence (for non-database data)
+  persistence:
+    enabled: true
+    size: 10Gi
+
+#############################################
+# PostgreSQL (DISABLED - Using External)
+#############################################
+postgresql:
+  enabled: false  # We use external PostgreSQL
+
+#############################################
+# Hiera Configuration
+#############################################
+hiera:
+  # Optional: Separate Hiera data repository
+  hieradataurl: ""
+  
+  # Optional: eyaml encryption
+  eyaml:
+    existingMap: ""
+    existingSecret: ""
+
+#############################################
+# Certificate Management
+#############################################
+# NOTE: Puppet uses its own internal PKI for agent-server communication
+# External certificates (below) are ONLY for ingress/web access
+
+singleCA:
+  # Set to true if using external CA instead of Puppet's internal PKI
+  enabled: false
+
+puppetserver:
+  preGeneratedCertsJob:
+    # Set to true if you want to provide your own Puppet certificates
+    enabled: false
+
+#############################################
+# Ingress (DISABLED - Using Custom Traefik)
+#############################################
+ingress:
+  enabled: false  # We create custom IngressRouteTCP for SSL passthrough
+
+#############################################
+# Puppetboard (Web UI)
+#############################################
+puppetboard:
+  enabled: true
+  
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  
+  # Ingress handled by templates/puppetboard-ingress.yaml
+
+#############################################
+# Storage
+#############################################
+storage:
+  # storageClass: ""  # Use default or specify
+  annotations: {}
+
+#############################################
+# Monitoring (Optional)
+#############################################
+metrics:
+  prometheus:
+    enabled: false  # Enable if you have Prometheus
+  
+puppetdb:
+  metrics:
+    enabled: false
+
+#############################################
+# RBAC
+#############################################
+puppetserver:
+  serviceAccount:
+    enabled: true
+    create: true
+
+puppetdb:
+  serviceAccount:
+    enabled: true
+    create: true
