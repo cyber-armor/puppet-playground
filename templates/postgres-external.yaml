@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: puppetdb-postgres
+  namespace: puppet
+type: Opaque
+stringData:
+#   username: "{ .Values.additions.postgres.user }"
+#   password: "{ . Values.additions.postgres.password }"  # CHANGE THIS!
+  PUPPETDB_POSTGRES_HOSTNAME: "postgres-postgresql.db"
+  PUPPETDB_POSTGRES_PORT: 5432
+  PUPPETDB_POSTGRES_DATABASE: "puppetdb"
+  PUPPETDB_USER: "puppetdb_user"
+  PAPPETDB_PASSWORD: "P@ssw0rd"
+  PUPPETDB_NODE_TTL: "0s"
+  PUPPETDB_NODE_PURGE_TTL: "0s"
+  PUPPETDB_REPORT_TTL: "14d"
